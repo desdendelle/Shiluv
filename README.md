@@ -12,6 +12,8 @@ R7|The roaster will be published on or before Tuesday noon-time
 
 ## Implementation Highlights:
 
+ID|Item|Note
+--|-----------|----
 IH1|All times are JST|I.e., hours will move on JDT|
 IH2|Roster-Generation (Hence: RG): A Python function will run weekly| at 8AM Tuesday|
 IH3|Inputs to SG: context + requests| context: output of the prev run. requests: users requests|
