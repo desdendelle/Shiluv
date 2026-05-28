@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 
-from .roster_generation import generate_duty_roster
+from .business_logic import convert_programatsia_to_schedule, generate_duty_roster
 
 TIMEZONE = ZoneInfo("Asia/Jerusalem")
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -22,6 +22,12 @@ PASSWORD_ITERATIONS = 390_000
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
 FRONTEND_BUILD_DIR = REPO_ROOT / "frontend" / "build" / "web"
+FRONTEND_DEV_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+    "Clear-Site-Data": '"cache"',
+}
 
 
 @dataclass(frozen=True)
@@ -475,7 +481,7 @@ async def upload_programatsia(
     require_manager(user)
     state = get_state(week_start)
     file_name = file.filename or ""
-    if not file_name.endswith(".xlsx"):
+    if not file_name.lower().endswith(".xlsx"):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "invalid_file_type", "message": "Only .xlsx files are accepted"},
@@ -488,6 +494,14 @@ async def upload_programatsia(
         )
 
     uploaded_at = now()
+    converted_schedule = convert_programatsia_to_schedule(
+        week_start=week_start,
+        state=state,
+        user=user,
+        file_name=file_name,
+        uploaded_at=uploaded_at,
+        file_content=content,
+    )
     state.programatsia = ProgramatsiaStatus(
         week_start=state.week_start,
         status="converted",
@@ -495,12 +509,7 @@ async def upload_programatsia(
         uploaded_by=user.id,
         file_name=file_name,
     )
-    state.schedule = ShiftSchedule(
-        week_start=state.week_start,
-        visible_from=visible_from(state.week_start),
-        status="available",
-        shifts=sample_shifts(state.week_start),
-    )
+    state.schedule = converted_schedule
     for alert in state.alerts.values():
         if alert.type == "missing_programatsia":
             alert.status = "resolved"
@@ -724,6 +733,6 @@ def serve_frontend(full_path: str) -> FileResponse:
     build_dir = FRONTEND_BUILD_DIR.resolve()
     requested_path = (build_dir / full_path).resolve()
     if requested_path.is_relative_to(build_dir) and requested_path.is_file():
-        return FileResponse(requested_path)
+        return FileResponse(requested_path, headers=FRONTEND_DEV_HEADERS)
 
-    return FileResponse(index_path)
+    return FileResponse(index_path, headers=FRONTEND_DEV_HEADERS)

@@ -41,6 +41,10 @@ A suggested OpenAPI draft is available at [backend/docs/openapi.yaml](backend/do
 The FastAPI development stub is implemented in `backend/dev_server`. Run
 backend commands from the `backend` directory so the `dev_server` package is on
 the Python import path.
+Academic exercise scaffolds for backend business logic live in
+`backend/dev_server/business_logic.py`. The current upload conversion function
+accepts the uploaded programatsia bytes, extracts example workbook metadata, and
+returns a constant but valid shift schedule.
 
 Development users:
 
@@ -76,6 +80,13 @@ PYTHONPATH=. python -m pytest tests
 ### Frontend draft
 
 The first Flutter Web draft is implemented in `frontend`.
+The manager upload screen accepts `.xlsx` programatsia files only and sends the
+selected file to the FastAPI development backend for schedule conversion.
+The schedule screen checks programatsia status before requesting the converted
+schedule, so a missing upload does not generate an expected `409 Conflict` in
+the development server logs.
+The Flutter API client decodes response bytes as UTF-8 explicitly so Hebrew
+strings returned by the backend render correctly.
 
 This container has a local Node/npm and Flutter toolchain installed under `.tools`.
 Use these environment variables when running Flutter in this container so Flutter
@@ -101,10 +112,15 @@ Build the static frontend:
 
 ```bash
 cd frontend
-flutter build web --release --dart-define=API_BASE_URL=https://api.example.invalid
+flutter build web --release --dart-define=API_BASE_URL=http://localhost:8000
 ```
 
-The generated static site is written to `frontend/build/web`.
+The generated static site is written to `frontend/build/web`. The committed
+development snapshot should target `http://localhost:8000` so the backend dev
+server can run the full local flow.
+The FastAPI development server sends no-cache headers for the static frontend,
+and the Flutter HTML template unregisters old service workers so local browsers
+do not keep serving a stale UI.
 
 ### Committed frontend build snapshot
 

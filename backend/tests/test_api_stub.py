@@ -39,6 +39,7 @@ def test_frontend_static_site_is_served_when_built() -> None:
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+    assert response.headers["cache-control"] == "no-store, no-cache, must-revalidate, max-age=0"
 
 
 def test_dummy_manager_can_authenticate() -> None:
@@ -63,12 +64,33 @@ def test_worker_cannot_upload_programatsia() -> None:
     assert response.status_code == 403
 
 
+def test_manager_upload_rejects_non_xlsx_file_name() -> None:
+    response = client.post(
+        "/api/v1/weeks/2026-06-01/programatsia",
+        headers=auth("manager", "manager"),
+        files={"file": ("programatsia.csv", b"stub", "text/csv")},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "invalid_file_type"
+
+
 def test_manager_upload_exposes_schedule() -> None:
     upload_week("2026-06-01")
 
     schedule = client.get("/api/v1/weeks/2026-06-01/schedule", headers=auth("user1", "user1"))
     assert schedule.status_code == 200
-    assert len(schedule.json()["shifts"]) >= 1
+    body = schedule.json()
+    assert body["status"] == "available"
+    assert body["shifts"] == [
+        {
+            "id": "2026-06-01-exercise-shift-1",
+            "starts_at": "2026-06-07T08:00:00+03:00",
+            "ends_at": "2026-06-07T16:00:00+03:00",
+            "label": "משמרת בוקר",
+            "location": "מוקד",
+            "required_workers": 1,
+        }
+    ]
 
 
 def test_worker_can_create_own_exclusion() -> None:

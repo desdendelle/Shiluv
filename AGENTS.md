@@ -87,7 +87,7 @@ code
 - The development FastAPI server should serve `frontend/build/web` at `/` when the frontend has already been built. This is a localhost-only convenience so backend developers can inspect the frontend without Flutter or a separate static web server.
 - Run the development server from `backend` with `./run_dev_server` after activating the existing virtualenv.
 - `backend/run_dev_server` should invoke `python -m uvicorn` from the active virtualenv rather than a direct `uvicorn` console script, because moved virtualenvs can leave stale shebang paths.
-- Keep the academic roster-generation exercise in `backend/dev_server/roster_generation.py`.
+- Keep academic backend exercise functions, including programatsia conversion and roster generation, in `backend/dev_server/business_logic.py`.
 - Run backend tests from `backend` with `PYTHONPATH=. python -m pytest tests` after installing development dependencies in the active virtualenv.
 
 ### Frontend
@@ -97,7 +97,10 @@ code
 - A local Node/npm and Flutter toolchain may exist under `.tools`; keep `.tools` untracked.
 - Temporarily keep `frontend/build/web` tracked as a backend-developer convenience snapshot, while recognizing it as technical debt.
 - Commit `frontend/build/web` only for intentional handoff snapshots; do not commit every local frontend rebuild.
+- Build committed `frontend/build/web` snapshots with `--dart-define=API_BASE_URL=http://localhost:8000` so `backend/run_dev_server` can serve an end-to-end local system.
 - Keep other generated Flutter artifacts untracked, including `frontend/.dart_tool`, non-web build outputs, pub caches, coverage output, and symbol/map files.
+- Keep the local Flutter Web template and FastAPI static responses cache-resistant; stale service workers or browser caches can make backend developers see an old UI.
+- Decode backend JSON response bytes as UTF-8 explicitly in the Flutter API client; do not rely on implicit `response.body` decoding for Hebrew text.
 - In this container, run Flutter with workspace-local environment variables:
   - `PATH=/workspace/code/.tools/flutter/bin:/workspace/code/.tools/node/bin:$PATH`
   - `HOME=/workspace/code/.tools/home`
@@ -120,7 +123,7 @@ code
   - Shift exclusion and cancellation flow
   - Submitted exclusions summary
 - Expected manager screens:
-  - Programatsia upload
+  - Programatsia upload that accepts `.xlsx` files only
   - Upload validation and conversion status
   - Shift schedule review
   - Duty roster review
@@ -132,3 +135,4 @@ code
   - Server time and deadline display
   - Loading, empty, error, and retry states
 - The frontend may hide actions after deadlines, but the backend must enforce all role permissions, upload validity, cutoff times, and authorization rules.
+- Avoid calling the schedule endpoint from the frontend before programatsia status is `converted`; the backend uses `409 Conflict` for unavailable schedules, but the normal pre-upload UI should not create noisy expected conflicts.

@@ -10,6 +10,9 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:web/web.dart' as web;
 
+import 'src/json_decoding.dart';
+import 'src/upload_validation.dart';
+
 const apiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
   defaultValue: 'http://localhost:8000',
@@ -31,10 +34,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: '/schedule', builder: (context, state) => const ScheduleScreen()),
-          GoRoute(path: '/manager', builder: (context, state) => const ManagerScreen()),
-          GoRoute(path: '/roster', builder: (context, state) => const RosterScreen()),
-          GoRoute(path: '/alerts', builder: (context, state) => const AlertsScreen()),
+          GoRoute(
+              path: '/schedule',
+              builder: (context, state) => const ScheduleScreen()),
+          GoRoute(
+              path: '/manager',
+              builder: (context, state) => const ManagerScreen()),
+          GoRoute(
+              path: '/roster',
+              builder: (context, state) => const RosterScreen()),
+          GoRoute(
+              path: '/alerts',
+              builder: (context, state) => const AlertsScreen()),
         ],
       ),
     ],
@@ -169,15 +180,20 @@ class ApiClient {
   }
 
   Future<List<Shift>> schedule(String weekStart) async {
-    final body = await _get('/api/v1/weeks/$weekStart/schedule', allowConflict: true);
+    final body =
+        await _get('/api/v1/weeks/$weekStart/schedule', allowConflict: true);
     final items = body['shifts'] as List<dynamic>? ?? [];
-    return items.map((item) => Shift.fromJson(item as Map<String, dynamic>)).toList();
+    return items
+        .map((item) => Shift.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<ShiftExclusion>> exclusions(String weekStart) async {
     final body = await _get('/api/v1/weeks/$weekStart/shift-exclusions');
     final items = body['exclusions'] as List<dynamic>? ?? [];
-    return items.map((item) => ShiftExclusion.fromJson(item as Map<String, dynamic>)).toList();
+    return items
+        .map((item) => ShiftExclusion.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<ProgramatsiaStatus> uploadProgramatsia({
@@ -188,9 +204,10 @@ class ApiClient {
     final uri = Uri.parse('$apiBaseUrl/api/v1/weeks/$weekStart/programatsia');
     final request = http.MultipartRequest('POST', uri);
     request.headers['Authorization'] = _headers['Authorization']!;
-    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
+    request.files
+        .add(http.MultipartFile.fromBytes('file', bytes, filename: file.name));
     final response = await request.send();
-    final body = jsonDecode(await response.stream.bytesToString()) as Map<String, dynamic>;
+    final body = decodeJsonObjectFromBytes(await response.stream.toBytes());
     if (response.statusCode >= 400) {
       throw ApiException(_errorMessage(body));
     }
@@ -217,19 +234,24 @@ class ApiClient {
   }
 
   Future<DutyRoster> generateRoster(String weekStart) async {
-    final body = await _post('/api/v1/weeks/$weekStart/roster/generate', {'force': true}, accepted: true);
+    final body = await _post(
+        '/api/v1/weeks/$weekStart/roster/generate', {'force': true},
+        accepted: true);
     return DutyRoster.fromJson(body);
   }
 
   Future<DutyRoster> authorizeRoster(String weekStart) async {
-    final body = await _post('/api/v1/weeks/$weekStart/roster/authorize', {'approved': true});
+    final body = await _post(
+        '/api/v1/weeks/$weekStart/roster/authorize', {'approved': true});
     return DutyRoster.fromJson(body);
   }
 
   Future<List<AlertItem>> alerts(String weekStart) async {
     final body = await _get('/api/v1/weeks/$weekStart/alerts');
     final items = body['alerts'] as List<dynamic>? ?? [];
-    return items.map((item) => AlertItem.fromJson(item as Map<String, dynamic>)).toList();
+    return items
+        .map((item) => AlertItem.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<Map<String, dynamic>> _get(
@@ -239,7 +261,8 @@ class ApiClient {
   }) async {
     final response = await http.get(
       Uri.parse('$apiBaseUrl$path'),
-      headers: authenticated ? _headers : const {'Content-Type': 'application/json'},
+      headers:
+          authenticated ? _headers : const {'Content-Type': 'application/json'},
     );
     if (allowConflict && response.statusCode == 409) {
       return <String, dynamic>{};
@@ -258,15 +281,15 @@ class ApiClient {
       body: jsonEncode(payload),
     );
     final expected = accepted ? 202 : 200;
+    final body = decodeJsonObjectFromBytes(response.bodyBytes);
     if (response.statusCode != expected && response.statusCode != 201) {
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
       throw ApiException(_errorMessage(body));
     }
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    return body;
   }
 
   Map<String, dynamic> _decode(http.Response response) {
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = decodeJsonObjectFromBytes(response.bodyBytes);
     if (response.statusCode >= 400) {
       throw ApiException(_errorMessage(body));
     }
@@ -371,6 +394,18 @@ class ShiftExclusion {
   }
 }
 
+class ScheduleViewData {
+  const ScheduleViewData({
+    required this.programatsia,
+    required this.shifts,
+    required this.exclusions,
+  });
+
+  final ProgramatsiaStatus programatsia;
+  final List<Shift> shifts;
+  final List<ShiftExclusion> exclusions;
+}
+
 class DutyRoster {
   const DutyRoster({required this.status, required this.assignments});
 
@@ -381,7 +416,10 @@ class DutyRoster {
     final items = json['assignments'] as List<dynamic>? ?? [];
     return DutyRoster(
       status: json['status'] as String,
-      assignments: items.map((item) => RosterAssignment.fromJson(item as Map<String, dynamic>)).toList(),
+      assignments: items
+          .map(
+              (item) => RosterAssignment.fromJson(item as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -401,7 +439,8 @@ class RosterAssignment {
 }
 
 class AlertItem {
-  const AlertItem({required this.type, required this.severity, required this.status});
+  const AlertItem(
+      {required this.type, required this.severity, required this.status});
 
   final String type;
   final String severity;
@@ -447,6 +486,27 @@ String statusHebrew(String status) {
     'resolved' => 'נפתר',
     _ => status,
   };
+}
+
+Future<ScheduleViewData> loadScheduleViewData(
+  ApiClient client,
+  String weekStart,
+) async {
+  final initialResults = await Future.wait<Object>([
+    client.programatsia(weekStart),
+    client.exclusions(weekStart),
+  ]);
+  final programatsia = initialResults[0] as ProgramatsiaStatus;
+  final exclusions = initialResults[1] as List<ShiftExclusion>;
+  final shifts = shouldFetchSchedule(programatsia.status)
+      ? await client.schedule(weekStart)
+      : <Shift>[];
+
+  return ScheduleViewData(
+    programatsia: programatsia,
+    shifts: shifts,
+    exclusions: exclusions,
+  );
 }
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -542,31 +602,42 @@ class _LoginForm extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('שילוב', style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700)),
+            Text('שילוב',
+                style: Theme.of(context)
+                    .textTheme
+                    .displaySmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            Text('ניהול סידור שבועי', style: Theme.of(context).textTheme.titleMedium),
+            Text('ניהול סידור שבועי',
+                style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 28),
             TextField(
               controller: usernameController,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.person_outline), labelText: 'שם משתמש'),
+              decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.person_outline),
+                  labelText: 'שם משתמש'),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 14),
             TextField(
               controller: passwordController,
-              decoration: const InputDecoration(prefixIcon: Icon(Icons.lock_outline), labelText: 'סיסמה'),
+              decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.lock_outline), labelText: 'סיסמה'),
               obscureText: true,
               onSubmitted: (_) => onSubmit(),
             ),
             if (error != null) ...[
               const SizedBox(height: 14),
-              Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
             const SizedBox(height: 22),
             FilledButton.icon(
               onPressed: isLoading ? null : onSubmit,
               icon: isLoading
-                  ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.login),
               label: const Text('כניסה'),
             ),
@@ -618,7 +689,8 @@ class _SchedulePatternPainter extends CustomPainter {
     final line = Paint()
       ..color = Colors.white.withValues(alpha: 0.16)
       ..strokeWidth = 1;
-    final block = Paint()..color = const Color(0xFFC28738).withValues(alpha: 0.8);
+    final block = Paint()
+      ..color = const Color(0xFFC28738).withValues(alpha: 0.8);
     for (var x = 28.0; x < size.width; x += 72) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), line);
     }
@@ -629,7 +701,8 @@ class _SchedulePatternPainter extends CustomPainter {
       final left = 34.0 + (index % 3) * 92;
       final top = 48.0 + index * 34;
       canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(left, top, 132, 30), const Radius.circular(6)),
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(left, top, 132, 30), const Radius.circular(6)),
         block,
       );
     }
@@ -658,12 +731,24 @@ class AppShell extends ConsumerWidget {
       _ => 0,
     };
     final destinations = [
-      const NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: 'סידור'),
+      const NavigationDestination(
+          icon: Icon(Icons.calendar_month_outlined),
+          selectedIcon: Icon(Icons.calendar_month),
+          label: 'סידור'),
       if (auth.user!.isManager)
-        const NavigationDestination(icon: Icon(Icons.upload_file_outlined), selectedIcon: Icon(Icons.upload_file), label: 'ניהול'),
-      const NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'כוננות'),
+        const NavigationDestination(
+            icon: Icon(Icons.upload_file_outlined),
+            selectedIcon: Icon(Icons.upload_file),
+            label: 'ניהול'),
+      const NavigationDestination(
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment),
+          label: 'כוננות'),
       if (auth.user!.isManager)
-        const NavigationDestination(icon: Icon(Icons.notifications_outlined), selectedIcon: Icon(Icons.notifications), label: 'התראות'),
+        const NavigationDestination(
+            icon: Icon(Icons.notifications_outlined),
+            selectedIcon: Icon(Icons.notifications),
+            label: 'התראות'),
     ];
     final routes = [
       '/schedule',
@@ -696,7 +781,8 @@ class AppShell extends ConsumerWidget {
             return Row(
               children: [
                 NavigationRail(
-                  selectedIndex: selected.clamp(0, destinations.length - 1).toInt(),
+                  selectedIndex:
+                      selected.clamp(0, destinations.length - 1).toInt(),
                   onDestinationSelected: (index) => context.go(routes[index]),
                   labelType: NavigationRailLabelType.all,
                   destinations: [
@@ -717,7 +803,8 @@ class AppShell extends ConsumerWidget {
             children: [
               Expanded(child: child),
               NavigationBar(
-                selectedIndex: selected.clamp(0, destinations.length - 1).toInt(),
+                selectedIndex:
+                    selected.clamp(0, destinations.length - 1).toInt(),
                 onDestinationSelected: (index) => context.go(routes[index]),
                 destinations: destinations,
               ),
@@ -730,7 +817,8 @@ class AppShell extends ConsumerWidget {
 }
 
 class PageFrame extends StatelessWidget {
-  const PageFrame({required this.title, required this.children, super.key, this.action});
+  const PageFrame(
+      {required this.title, required this.children, super.key, this.action});
 
   final String title;
   final List<Widget> children;
@@ -744,7 +832,11 @@ class PageFrame extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+              child: Text(title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w700)),
             ),
             if (action != null) action!,
           ],
@@ -757,7 +849,11 @@ class PageFrame extends StatelessWidget {
 }
 
 class SummaryTile extends StatelessWidget {
-  const SummaryTile({required this.icon, required this.title, required this.value, super.key});
+  const SummaryTile(
+      {required this.icon,
+      required this.title,
+      required this.value,
+      super.key});
 
   final IconData icon;
   final String title;
@@ -771,7 +867,8 @@ class SummaryTile extends StatelessWidget {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+              backgroundColor:
+                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
               foregroundColor: Theme.of(context).colorScheme.primary,
               child: Icon(icon),
             ),
@@ -782,7 +879,11 @@ class SummaryTile extends StatelessWidget {
                 children: [
                   Text(title, style: Theme.of(context).textTheme.labelLarge),
                   const SizedBox(height: 4),
-                  Text(value, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(value,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
@@ -801,17 +902,14 @@ class ScheduleScreen extends ConsumerWidget {
     final auth = ref.watch(authProvider);
     final client = auth.client!;
     final weekStart = currentWeekStart();
-    return FutureBuilder<List<Object>>(
-      future: Future.wait([
-        client.programatsia(weekStart),
-        client.schedule(weekStart),
-        client.exclusions(weekStart),
-      ]),
+    return FutureBuilder<ScheduleViewData>(
+      future: loadScheduleViewData(client, weekStart),
       builder: (context, snapshot) {
         final loading = snapshot.connectionState != ConnectionState.done;
-        final programatsia = snapshot.data?[0] as ProgramatsiaStatus?;
-        final shifts = snapshot.data?[1] as List<Shift>? ?? [];
-        final exclusions = snapshot.data?[2] as List<ShiftExclusion>? ?? [];
+        final data = snapshot.data;
+        final programatsia = data?.programatsia;
+        final shifts = data?.shifts ?? [];
+        final exclusions = data?.exclusions ?? [];
         return PageFrame(
           title: 'הסידור השבועי',
           children: [
@@ -819,7 +917,10 @@ class ScheduleScreen extends ConsumerWidget {
               runSpacing: 12,
               spacing: 12,
               children: [
-                SizedBox(width: 260, child: SummaryTile(icon: Icons.today, title: 'שבוע', value: weekStart)),
+                SizedBox(
+                    width: 260,
+                    child: SummaryTile(
+                        icon: Icons.today, title: 'שבוע', value: weekStart)),
                 SizedBox(
                   width: 260,
                   child: SummaryTile(
@@ -828,21 +929,32 @@ class ScheduleScreen extends ConsumerWidget {
                     value: statusHebrew(programatsia?.status ?? 'missing'),
                   ),
                 ),
-                SizedBox(width: 260, child: SummaryTile(icon: Icons.block_outlined, title: 'אילוצים', value: '${exclusions.length}')),
+                SizedBox(
+                    width: 260,
+                    child: SummaryTile(
+                        icon: Icons.block_outlined,
+                        title: 'אילוצים',
+                        value: '${exclusions.length}')),
               ],
             ),
             const SizedBox(height: 18),
             if (loading)
-              const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+              const Center(
+                  child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator()))
             else if (shifts.isEmpty)
-              const EmptyState(icon: Icons.event_busy, title: 'הסידור עדיין לא זמין')
+              const EmptyState(
+                  icon: Icons.event_busy, title: 'הסידור עדיין לא זמין')
             else
               for (final shift in shifts)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: ShiftCard(
                     shift: shift,
-                    excluded: exclusions.any((item) => item.shiftId == shift.id && item.workerId == auth.user!.id),
+                    excluded: exclusions.any((item) =>
+                        item.shiftId == shift.id &&
+                        item.workerId == auth.user!.id),
                     onExclude: auth.user!.isManager
                         ? null
                         : () async {
@@ -852,7 +964,8 @@ class ScheduleScreen extends ConsumerWidget {
                               workerId: auth.user!.id,
                             );
                             if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('האילוץ נשמר')));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('האילוץ נשמר')));
                             }
                           },
                   ),
@@ -865,7 +978,8 @@ class ScheduleScreen extends ConsumerWidget {
 }
 
 class ShiftCard extends StatelessWidget {
-  const ShiftCard({required this.shift, required this.excluded, this.onExclude, super.key});
+  const ShiftCard(
+      {required this.shift, required this.excluded, this.onExclude, super.key});
 
   final Shift shift;
   final bool excluded;
@@ -882,7 +996,9 @@ class ShiftCard extends StatelessWidget {
               width: 6,
               height: 68,
               decoration: BoxDecoration(
-                color: excluded ? Theme.of(context).colorScheme.secondary : Theme.of(context).colorScheme.primary,
+                color: excluded
+                    ? Theme.of(context).colorScheme.secondary
+                    : Theme.of(context).colorScheme.primary,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -891,9 +1007,14 @@ class ShiftCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(shift.label, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                  Text(shift.label,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
-                  Text('${formatTime(shift.startsAt)} - ${formatTime(shift.endsAt)}'),
+                  Text(
+                      '${formatTime(shift.startsAt)} - ${formatTime(shift.endsAt)}'),
                   if (shift.location != null) Text(shift.location!),
                 ],
               ),
@@ -922,26 +1043,68 @@ class ManagerScreen extends ConsumerStatefulWidget {
 
 class _ManagerScreenState extends ConsumerState<ManagerScreen> {
   bool uploading = false;
+  String? selectedUploadFileName;
+  String? uploadMessage;
+  String? uploadError;
 
-  Future<void> uploadFile(ApiClient client, String weekStart) async {
+  Future<web.File?> pickProgramatsiaFile() {
     final input = web.HTMLInputElement()
       ..type = 'file'
-      ..accept = '.xlsx';
-    final change = Completer<void>();
+      ..accept =
+          '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    input.style.display = 'none';
+
+    final body = web.document.body;
+    if (body == null) {
+      return Future.value(null);
+    }
+
+    final pickedFile = Completer<web.File?>();
+
+    void complete(web.File? file) {
+      if (!pickedFile.isCompleted) {
+        pickedFile.complete(file);
+      }
+      input.remove();
+    }
+
     input.addEventListener(
       'change',
       ((web.Event _) {
-        if (!change.isCompleted) {
-          change.complete();
-        }
+        complete(input.files?.item(0));
       }).toJS,
     );
+    input.addEventListener(
+      'cancel',
+      ((web.Event _) {
+        complete(null);
+      }).toJS,
+    );
+    body.appendChild(input);
     input.click();
-    await change.future;
-    final file = input.files?.item(0);
+
+    return pickedFile.future;
+  }
+
+  Future<void> uploadFile(ApiClient client, String weekStart) async {
+    final file = await pickProgramatsiaFile();
     if (file == null) {
       return;
     }
+    final fileName = file.name;
+    if (!isXlsxFileName(fileName)) {
+      setState(() {
+        selectedUploadFileName = fileName;
+        uploadMessage = null;
+        uploadError = 'יש לבחור קובץ ‎.xlsx בלבד';
+      });
+      return;
+    }
+    setState(() {
+      selectedUploadFileName = fileName;
+      uploadMessage = null;
+      uploadError = null;
+    });
     final reader = web.FileReader();
     final loaded = Completer<Uint8List>();
     reader.addEventListener(
@@ -963,15 +1126,33 @@ class _ManagerScreenState extends ConsumerState<ManagerScreen> {
     );
     reader.readAsArrayBuffer(file);
     final bytes = await loaded.future;
+    if (bytes.isEmpty) {
+      setState(() {
+        uploadMessage = null;
+        uploadError = 'הקובץ ריק';
+      });
+      return;
+    }
     setState(() => uploading = true);
     try {
-      await client.uploadProgramatsia(weekStart: weekStart, file: file, bytes: bytes);
+      await client.uploadProgramatsia(
+          weekStart: weekStart, file: file, bytes: bytes);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('הקובץ הועלה')));
+        setState(() {
+          uploadMessage = 'הקובץ הועלה והסידור נוצר';
+          uploadError = null;
+        });
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('הקובץ הועלה')));
       }
     } on ApiException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+        setState(() {
+          uploadMessage = null;
+          uploadError = error.message;
+        });
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
       }
     } finally {
       if (mounted) {
@@ -993,7 +1174,9 @@ class _ManagerScreenState extends ConsumerState<ManagerScreen> {
           action: FilledButton.icon(
             onPressed: uploading ? null : () => uploadFile(client, weekStart),
             icon: uploading
-                ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.upload_file),
             label: const Text('העלאת קובץ'),
           ),
@@ -1002,7 +1185,12 @@ class _ManagerScreenState extends ConsumerState<ManagerScreen> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                SizedBox(width: 280, child: SummaryTile(icon: Icons.calendar_view_week, title: 'שבוע עבודה', value: weekStart)),
+                SizedBox(
+                    width: 280,
+                    child: SummaryTile(
+                        icon: Icons.calendar_view_week,
+                        title: 'שבוע עבודה',
+                        value: weekStart)),
                 SizedBox(
                   width: 280,
                   child: SummaryTile(
@@ -1022,10 +1210,106 @@ class _ManagerScreenState extends ConsumerState<ManagerScreen> {
               ],
             ),
             const SizedBox(height: 18),
+            UploadStatusPanel(
+              selectedFileName: selectedUploadFileName ?? status?.fileName,
+              message: uploadMessage,
+              error: uploadError,
+              uploading: uploading,
+              onUpload: () => uploadFile(client, weekStart),
+            ),
+            const SizedBox(height: 18),
             const WorkflowBand(),
           ],
         );
       },
+    );
+  }
+}
+
+class UploadStatusPanel extends StatelessWidget {
+  const UploadStatusPanel({
+    required this.selectedFileName,
+    required this.message,
+    required this.error,
+    required this.uploading,
+    required this.onUpload,
+    super.key,
+  });
+
+  final String? selectedFileName;
+  final String? message;
+  final String? error;
+  final bool uploading;
+  final VoidCallback onUpload;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor:
+                      colorScheme.secondary.withValues(alpha: 0.14),
+                  foregroundColor: colorScheme.secondary,
+                  child: const Icon(Icons.table_chart_outlined),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('קובץ פרוגרמטיקה',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text('‎.xlsx בלבד',
+                          style: Theme.of(context).textTheme.bodyMedium),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (selectedFileName != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                selectedFileName!,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+            if (message != null) ...[
+              const SizedBox(height: 10),
+              Text(message!, style: TextStyle(color: colorScheme.primary)),
+            ],
+            if (error != null) ...[
+              const SizedBox(height: 10),
+              Text(error!, style: TextStyle(color: colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: uploading ? null : onUpload,
+              icon: uploading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.upload_file),
+              label: const Text('בחירת קובץ והעלאה'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1057,12 +1341,16 @@ class WorkflowBand extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
-                      backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withValues(alpha: 0.12),
                       foregroundColor: Theme.of(context).colorScheme.primary,
                       child: Icon(step.$2),
                     ),
                     const SizedBox(height: 8),
-                    Text(step.$1, style: Theme.of(context).textTheme.labelLarge),
+                    Text(step.$1,
+                        style: Theme.of(context).textTheme.labelLarge),
                   ],
                 ),
               ),
@@ -1116,7 +1404,9 @@ class _RosterScreenState extends ConsumerState<RosterScreen> {
                       label: const Text('יצירת טיוטה'),
                     ),
                     FilledButton.icon(
-                      onPressed: roster?.status == 'ready_for_review' ? () => authorize(client, weekStart) : null,
+                      onPressed: roster?.status == 'ready_for_review'
+                          ? () => authorize(client, weekStart)
+                          : null,
                       icon: const Icon(Icons.verified),
                       label: const Text('אישור'),
                     ),
@@ -1134,9 +1424,14 @@ class _RosterScreenState extends ConsumerState<RosterScreen> {
             ),
             const SizedBox(height: 18),
             if (snapshot.connectionState != ConnectionState.done)
-              const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+              const Center(
+                  child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator()))
             else if (roster == null || roster.assignments.isEmpty)
-              const EmptyState(icon: Icons.assignment_late_outlined, title: 'אין טיוטת כוננות')
+              const EmptyState(
+                  icon: Icons.assignment_late_outlined,
+                  title: 'אין טיוטת כוננות')
             else
               for (final assignment in roster.assignments)
                 Padding(
@@ -1171,9 +1466,13 @@ class AlertsScreen extends ConsumerWidget {
           title: 'התראות',
           children: [
             if (snapshot.connectionState != ConnectionState.done)
-              const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+              const Center(
+                  child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator()))
             else if (alerts.isEmpty)
-              const EmptyState(icon: Icons.notifications_none, title: 'אין התראות')
+              const EmptyState(
+                  icon: Icons.notifications_none, title: 'אין התראות')
             else
               for (final alert in alerts)
                 Padding(
@@ -1181,8 +1480,12 @@ class AlertsScreen extends ConsumerWidget {
                   child: Card(
                     child: ListTile(
                       leading: Icon(
-                        alert.severity == 'critical' ? Icons.error_outline : Icons.warning_amber,
-                        color: alert.severity == 'critical' ? Colors.red.shade700 : const Color(0xFFC28738),
+                        alert.severity == 'critical'
+                            ? Icons.error_outline
+                            : Icons.warning_amber,
+                        color: alert.severity == 'critical'
+                            ? Colors.red.shade700
+                            : const Color(0xFFC28738),
                       ),
                       title: Text(_alertTitle(alert.type)),
                       subtitle: Text(statusHebrew(alert.status)),
@@ -1221,7 +1524,8 @@ class EmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 42, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 42, color: Theme.of(context).colorScheme.primary),
               const SizedBox(height: 12),
               Text(title, style: Theme.of(context).textTheme.titleMedium),
             ],
