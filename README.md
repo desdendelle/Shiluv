@@ -38,7 +38,9 @@ A suggested OpenAPI draft is available at [backend/docs/openapi.yaml](backend/do
 
 ### Backend stub
 
-The FastAPI development stub is implemented in `backend/src/shiluv_api`.
+The FastAPI development stub is implemented in `backend/dev_server`. Run
+backend commands from the `backend` directory so the `dev_server` package is on
+the Python import path.
 
 Development users:
 
@@ -58,6 +60,9 @@ pip install -r requirements-dev.txt
 ./run_dev_server
 ```
 
+`run_dev_server` uses the active virtualenv's `python -m uvicorn` entry point and
+sets `PYTHONPATH` to the `backend` directory.
+
 The backend is available at `http://localhost:8000`. Its generated API docs are available at `http://localhost:8000/docs`.
 If `frontend/build/web` exists, the same FastAPI process serves the Flutter static site at `http://localhost:8000/`.
 
@@ -65,7 +70,7 @@ Run backend tests:
 
 ```bash
 cd backend
-PYTHONPATH=src venv/bin/pytest tests
+PYTHONPATH=. python -m pytest tests
 ```
 
 ### Frontend draft
@@ -100,6 +105,9 @@ flutter build web --release --dart-define=API_BASE_URL=https://api.example.inval
 ```
 
 The generated static site is written to `frontend/build/web`.
+Generated Flutter artifacts such as `frontend/.dart_tool`, `frontend/build`,
+pub caches, coverage output, and symbol/map files are ignored by git and should
+be regenerated locally.
 
 Installed local tool versions:
 

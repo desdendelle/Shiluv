@@ -7,11 +7,17 @@ __pycache__/
 venv/
 .tools/
 
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-build/
+# Frontend / Flutter Web generated files
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+frontend/.pub/
+frontend/build/
+frontend/coverage/
+frontend/app.*.symbols
+frontend/app.*.map.json
 
 .env
 .env.*

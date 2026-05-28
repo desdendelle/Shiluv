@@ -79,19 +79,23 @@ code
 ### Backend
 - Implement the backend in Python.
 - Keep all backend-owned code, tests, dependency manifests, and API docs under `backend`.
-- The local development backend is a FastAPI application under `backend/src/shiluv_api`.
+- The local development backend is a FastAPI application under `backend/dev_server`.
+- Run backend Python commands from `backend` with `PYTHONPATH=.` so the `dev_server` package resolves correctly.
 - Keep the FastAPI stub aligned with `backend/docs/openapi.yaml` as the protocol evolves.
 - The production AWS backend will be implemented as a Python-based CDK stack.
 - Use `backend/requirements.txt` for runtime dependencies and `backend/requirements-dev.txt` for test/development dependencies until the project adopts a different Python packaging approach.
 - The development FastAPI server should serve `frontend/build/web` at `/` when the frontend has already been built. This is a localhost-only convenience so backend developers can inspect the frontend without Flutter or a separate static web server.
 - Run the development server from `backend` with `./run_dev_server` after activating the existing virtualenv.
-- Keep the academic roster-generation exercise in `backend/src/shiluv_api/roster_generation.py`.
+- `backend/run_dev_server` should invoke `python -m uvicorn` from the active virtualenv rather than a direct `uvicorn` console script, because moved virtualenvs can leave stale shebang paths.
+- Keep the academic roster-generation exercise in `backend/dev_server/roster_generation.py`.
+- Run backend tests from `backend` with `PYTHONPATH=. python -m pytest tests` after installing development dependencies in the active virtualenv.
 
 ### Frontend
 - Implement the frontend as a Flutter Web mobile-first static app.
 - Keep the Flutter project under `frontend`.
 - The frontend build output should be suitable for static hosting on Cloudflare Pages.
 - A local Node/npm and Flutter toolchain may exist under `.tools`; keep `.tools` untracked.
+- Keep generated Flutter artifacts untracked, including `frontend/.dart_tool`, `frontend/build`, pub caches, coverage output, and symbol/map files.
 - In this container, run Flutter with workspace-local environment variables:
   - `PATH=/workspace/code/.tools/flutter/bin:/workspace/code/.tools/node/bin:$PATH`
   - `HOME=/workspace/code/.tools/home`

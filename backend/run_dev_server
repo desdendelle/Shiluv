@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+package_dir="$script_dir/dev_server"
+
+if ! command -v python >/dev/null 2>&1; then
+  echo "python was not found. Activate the existing virtualenv first:" >&2
+  echo "  . venv/bin/activate" >&2
+  exit 1
+fi
+
+if ! python -c "import uvicorn" >/dev/null 2>&1; then
+  echo "uvicorn is not installed in the active Python environment." >&2
+  echo "Install backend development dependencies first:" >&2
+  echo "  pip install -r requirements-dev.txt" >&2
+  exit 1
+fi
+
+if [[ ! -d "$package_dir" ]]; then
+  echo "Cannot find backend package at: $package_dir" >&2
+  exit 1
+fi
+
+export PYTHONPATH="$script_dir${PYTHONPATH:+:$PYTHONPATH}"
+
+exec python -m uvicorn dev_server.main:app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --reload \
+  --reload-dir "$package_dir"

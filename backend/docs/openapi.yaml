@@ -1,0 +1,895 @@
+openapi: 3.1.0
+info:
+  title: Shiluv API
+  version: 0.1.0
+  description: >
+    Suggested API contract for the weekly shift schedule and duty roster
+    workflow. The initial FastAPI backend uses development-only HTTP Basic
+    authentication while the frontend and roster generation logic are being
+    developed, but the backend remains the authority for roles, deadlines,
+    validation, and authorization.
+servers:
+  - url: http://localhost:8000
+    description: Local FastAPI development server
+  - url: https://api.example.invalid
+    description: Production placeholder
+tags:
+  - name: System
+  - name: Users
+  - name: Weeks
+  - name: Programatsia
+  - name: Schedule
+  - name: Exclusions
+  - name: Roster
+  - name: Alerts
+security:
+  - BasicAuth: []
+paths:
+  /health:
+    get:
+      tags:
+        - System
+      security: []
+      operationId: getHealth
+      summary: Check service health
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /api/v1/config:
+    get:
+      tags:
+        - System
+      security: []
+      operationId: getConfig
+      summary: Get client configuration and deadline policy
+      responses:
+        "200":
+          description: Client configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientConfig"
+
+  /api/v1/session:
+    get:
+      tags:
+        - Users
+      operationId: getSession
+      summary: Get the authenticated development user
+      responses:
+        "200":
+          description: Authenticated user session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/users:
+    get:
+      tags:
+        - Users
+      operationId: listUsers
+      summary: List workers and managers
+      parameters:
+        - name: role
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/UserRole"
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - users
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+
+  /api/v1/weeks:
+    get:
+      tags:
+        - Weeks
+      operationId: listWeeks
+      summary: List known weekly cycles
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Earliest week start date to include.
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          description: Latest week start date to include.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Weekly cycles
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - weeks
+                properties:
+                  weeks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Week"
+
+  /api/v1/weeks/{weekStart}:
+    get:
+      tags:
+        - Weeks
+      operationId: getWeek
+      summary: Get one weekly cycle
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: Weekly cycle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Week"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/weeks/{weekStart}/programatsia:
+    get:
+      tags:
+        - Programatsia
+      operationId: getProgramatsiaStatus
+      summary: Get upload and validation status for the programatsia file
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: Programatsia status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramatsiaStatus"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      tags:
+        - Programatsia
+      operationId: uploadProgramatsia
+      summary: Upload the weekly programatsia .xlsx file
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The weekly programatsia .xlsx file.
+      responses:
+        "202":
+          description: Upload accepted for validation and conversion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramatsiaStatus"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api/v1/weeks/{weekStart}/schedule:
+    get:
+      tags:
+        - Schedule
+      operationId: getShiftSchedule
+      summary: Get the converted shift schedule
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: Shift schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftSchedule"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/weeks/{weekStart}/shift-exclusions:
+    get:
+      tags:
+        - Exclusions
+      operationId: listShiftExclusions
+      summary: List shift exclusions for the week
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+        - name: worker_id
+          in: query
+          required: false
+          description: Limit results to one worker. Workers may only query themselves.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Shift exclusions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - exclusions
+                properties:
+                  exclusions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShiftExclusion"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      tags:
+        - Exclusions
+      operationId: createShiftExclusion
+      summary: Exclude a worker from a shift before the cutoff
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftExclusionCreate"
+      responses:
+        "201":
+          description: Shift exclusion created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftExclusion"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/weeks/{weekStart}/shift-exclusions/{exclusionId}:
+    delete:
+      tags:
+        - Exclusions
+      operationId: deleteShiftExclusion
+      summary: Remove a shift exclusion before the cutoff
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+        - name: exclusionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Shift exclusion removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/weeks/{weekStart}/roster:
+    get:
+      tags:
+        - Roster
+      operationId: getDutyRoster
+      summary: Get the generated duty roster
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: Duty roster
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DutyRoster"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/weeks/{weekStart}/roster/generate:
+    post:
+      tags:
+        - Roster
+      operationId: generateDutyRoster
+      summary: Generate or regenerate the duty roster
+      description: >
+        The scheduled roster generation job should normally call this endpoint
+        or the same underlying service function. Manager-triggered regeneration
+        is useful during development and review.
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateRosterRequest"
+      responses:
+        "202":
+          description: Roster generation started or completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DutyRoster"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/weeks/{weekStart}/roster/authorize:
+    post:
+      tags:
+        - Roster
+      operationId: authorizeDutyRoster
+      summary: Authorize the duty roster after manager review
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthorizeRosterRequest"
+      responses:
+        "200":
+          description: Roster authorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DutyRoster"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/weeks/{weekStart}/alerts:
+    get:
+      tags:
+        - Alerts
+      operationId: listAlerts
+      summary: List operational alerts for a week
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/AlertStatus"
+      responses:
+        "200":
+          description: Alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - alerts
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Alert"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/weeks/{weekStart}/alerts/{alertId}/acknowledge:
+    post:
+      tags:
+        - Alerts
+      operationId: acknowledgeAlert
+      summary: Acknowledge an alert
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+        - name: alertId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Alert"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Development-only HTTP Basic authentication.
+
+  parameters:
+    WeekStart:
+      name: weekStart
+      in: path
+      required: true
+      description: Monday date that identifies the weekly cycle.
+      schema:
+        type: string
+        format: date
+      example: "2026-06-01"
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Request conflicts with the current workflow state or deadline
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Authenticated user is not allowed to perform the action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationFailed:
+      description: Uploaded file failed validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    Alert:
+      type: object
+      required:
+        - id
+        - week_start
+        - type
+        - severity
+        - status
+        - message
+        - created_at
+      properties:
+        id:
+          type: string
+        week_start:
+          type: string
+          format: date
+        type:
+          type: string
+          enum:
+            - missing_programatsia
+            - invalid_programatsia
+            - roster_not_authorized
+            - roster_generation_failed
+        severity:
+          type: string
+          enum:
+            - info
+            - warning
+            - critical
+        status:
+          $ref: "#/components/schemas/AlertStatus"
+        message:
+          type: string
+          description: Developer-facing message. UI text should be rendered in Hebrew by the frontend.
+        created_at:
+          type: string
+          format: date-time
+        acknowledged_at:
+          type: string
+          format: date-time
+        acknowledged_by:
+          type: string
+
+    AlertStatus:
+      type: string
+      enum:
+        - open
+        - acknowledged
+        - resolved
+
+    AuthorizeRosterRequest:
+      type: object
+      required:
+        - approved
+      properties:
+        approved:
+          type: boolean
+          const: true
+        note:
+          type: string
+          maxLength: 1000
+
+    ClientConfig:
+      type: object
+      required:
+        - timezone
+        - ui_language
+        - upload_deadline
+        - schedule_visible_from
+        - exclusion_cutoff
+        - roster_review_from
+        - roster_authorization_alert_after
+      properties:
+        timezone:
+          type: string
+          example: Asia/Jerusalem
+        ui_language:
+          type: string
+          enum:
+            - he
+        upload_deadline:
+          type: string
+          example: Monday morning
+        schedule_visible_from:
+          type: string
+          example: Monday 12:00
+        exclusion_cutoff:
+          type: string
+          example: Saturday 23:00
+        roster_review_from:
+          type: string
+          example: Sunday morning
+        roster_authorization_alert_after:
+          type: string
+          example: Tuesday 12:00
+
+    DutyRoster:
+      type: object
+      required:
+        - week_start
+        - status
+        - generated_at
+        - assignments
+      properties:
+        week_start:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+            - not_generated
+            - draft
+            - ready_for_review
+            - authorized
+        generated_at:
+          type: string
+          format: date-time
+        generated_by:
+          type: string
+          enum:
+            - scheduled_job
+            - manager
+        authorized_at:
+          type: string
+          format: date-time
+        authorized_by:
+          type: string
+        assignments:
+          type: array
+          items:
+            $ref: "#/components/schemas/RosterAssignment"
+        warnings:
+          type: array
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+
+    GenerateRosterRequest:
+      type: object
+      properties:
+        force:
+          type: boolean
+          default: false
+          description: Regenerate even if a draft roster already exists.
+
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - time
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+        time:
+          type: string
+          format: date-time
+
+    ProgramatsiaStatus:
+      type: object
+      required:
+        - week_start
+        - status
+      properties:
+        week_start:
+          type: string
+          format: date
+        status:
+          type: string
+          enum:
+            - missing
+            - uploaded
+            - validating
+            - valid
+            - invalid
+            - converted
+        uploaded_at:
+          type: string
+          format: date-time
+        uploaded_by:
+          type: string
+        file_name:
+          type: string
+        validation_issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/ValidationIssue"
+
+    RosterAssignment:
+      type: object
+      required:
+        - id
+        - shift_id
+        - worker_id
+      properties:
+        id:
+          type: string
+        shift_id:
+          type: string
+        worker_id:
+          type: string
+        notes:
+          type: string
+
+    Shift:
+      type: object
+      required:
+        - id
+        - starts_at
+        - ends_at
+        - label
+      properties:
+        id:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        label:
+          type: string
+          description: Source label from programatsia, not a translated UI string.
+        location:
+          type: string
+        required_workers:
+          type: integer
+          minimum: 1
+
+    ShiftExclusion:
+      type: object
+      required:
+        - id
+        - week_start
+        - shift_id
+        - worker_id
+        - created_at
+      properties:
+        id:
+          type: string
+        week_start:
+          type: string
+          format: date
+        shift_id:
+          type: string
+        worker_id:
+          type: string
+        reason:
+          type: string
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+
+    ShiftExclusionCreate:
+      type: object
+      required:
+        - shift_id
+        - worker_id
+      properties:
+        shift_id:
+          type: string
+        worker_id:
+          type: string
+        reason:
+          type: string
+          maxLength: 500
+
+    ShiftSchedule:
+      type: object
+      required:
+        - week_start
+        - visible_from
+        - status
+        - shifts
+      properties:
+        week_start:
+          type: string
+          format: date
+        visible_from:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+            - not_available
+            - available
+        shifts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Shift"
+
+    Session:
+      type: object
+      required:
+        - user
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required:
+        - id
+        - username
+        - display_name
+        - role
+        - active
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        role:
+          $ref: "#/components/schemas/UserRole"
+        active:
+          type: boolean
+
+    UserRole:
+      type: string
+      enum:
+        - worker
+        - manager
+
+    ValidationIssue:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        row:
+          type: integer
+          minimum: 1
+        column:
+          type: string
+
+    Week:
+      type: object
+      required:
+        - week_start
+        - timezone
+        - programatsia_status
+        - schedule_status
+        - roster_status
+      properties:
+        week_start:
+          type: string
+          format: date
+        timezone:
+          type: string
+          example: Asia/Jerusalem
+        programatsia_status:
+          type: string
+          enum:
+            - missing
+            - uploaded
+            - validating
+            - valid
+            - invalid
+            - converted
+        schedule_status:
+          type: string
+          enum:
+            - not_available
+            - available
+        roster_status:
+          type: string
+          enum:
+            - not_generated
+            - draft
+            - ready_for_review
+            - authorized
