@@ -1,0 +1,11 @@
+{
+  "name": "שילוב",
+  "short_name": "שילוב",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f6f7f4",
+  "theme_color": "#165b5a",
+  "description": "ניהול סידור עבודה וכוננות שבועי",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}

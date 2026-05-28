@@ -95,7 +95,9 @@ code
 - Keep the Flutter project under `frontend`.
 - The frontend build output should be suitable for static hosting on Cloudflare Pages.
 - A local Node/npm and Flutter toolchain may exist under `.tools`; keep `.tools` untracked.
-- Keep generated Flutter artifacts untracked, including `frontend/.dart_tool`, `frontend/build`, pub caches, coverage output, and symbol/map files.
+- Temporarily keep `frontend/build/web` tracked as a backend-developer convenience snapshot, while recognizing it as technical debt.
+- Commit `frontend/build/web` only for intentional handoff snapshots; do not commit every local frontend rebuild.
+- Keep other generated Flutter artifacts untracked, including `frontend/.dart_tool`, non-web build outputs, pub caches, coverage output, and symbol/map files.
 - In this container, run Flutter with workspace-local environment variables:
   - `PATH=/workspace/code/.tools/flutter/bin:/workspace/code/.tools/node/bin:$PATH`
   - `HOME=/workspace/code/.tools/home`

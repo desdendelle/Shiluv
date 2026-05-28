@@ -14,7 +14,9 @@ frontend/.flutter-plugins-dependencies
 frontend/.packages
 frontend/.pub-cache/
 frontend/.pub/
-frontend/build/
+frontend/build/*
+!frontend/build/web/
+!frontend/build/web/**
 frontend/coverage/
 frontend/app.*.symbols
 frontend/app.*.map.json

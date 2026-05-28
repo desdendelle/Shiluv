@@ -105,9 +105,29 @@ flutter build web --release --dart-define=API_BASE_URL=https://api.example.inval
 ```
 
 The generated static site is written to `frontend/build/web`.
-Generated Flutter artifacts such as `frontend/.dart_tool`, `frontend/build`,
-pub caches, coverage output, and symbol/map files are ignored by git and should
-be regenerated locally.
+
+### Committed frontend build snapshot
+
+For now, `frontend/build/web` is intentionally committed to git. This is a
+temporary development convenience: backend developers can run the FastAPI dev
+server end-to-end without installing Flutter, Node.js, npm, or any additional
+static-file server.
+
+This is a deliberate tradeoff and a technical debt. Build outputs are normally
+kept out of git because repeated rebuilds increase repository size, make diffs
+noisy, and can leave the committed static site stale relative to `frontend/lib`
+or `backend/docs/openapi.yaml`.
+
+Best practices while this snapshot is committed:
+
+- Commit `frontend/build/web` only for intentional handoff snapshots.
+- Do not commit every local frontend rebuild.
+- Rebuild and recommit the snapshot after user-visible frontend changes that
+  backend developers need for local end-to-end testing.
+- Keep `frontend/.dart_tool`, pub caches, coverage output, and non-web build
+  outputs ignored.
+- Replace this with a CI-produced downloadable artifact when the project has a
+  GitHub Actions workflow.
 
 Installed local tool versions:
 
